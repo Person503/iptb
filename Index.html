@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Channel Guide</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Retro Channel Guide</h1>
+        <input type="text" id="search" placeholder="Search events or categories...">
+        <div id="categories">
+            <button onclick="filterCategory('all')">All</button>
+            <button onclick="filterCategory('football')">Football</button>
+            <button onclick="filterCategory('boxing')">Boxing</button>
+            <button onclick="filterCategory('basketball')">Basketball</button>
+            <button onclick="filterCategory('miscellaneous')">Miscellaneous</button>
+        </div>
+    </header>
+    <main id="guide"></main>
+
+    <script src="script.js"></script>
+</body>
+</html>
