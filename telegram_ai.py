@@ -1,69 +1,64 @@
+import os
 import json
-import re
-from telethon import TelegramClient, events
-from transformers import pipeline
+from telethon import TelegramClient
+from datetime import datetime
 
-# ========== Fill in your keys ==========
-api_id = 21377580
-api_hash = '60815b4a66d3c361f789f62218cc54cd'
-invite_link = 'https://t.me/joinchat/+VCpvxO-uy4M5ZjNk'
-# ======================================
+# === Get environment variables from GitHub Secrets ===
+API_ID = int(os.getenv("TELEGRAM_API_ID"))
+API_HASH = os.getenv("TELEGRAM_API_HASH")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-client = TelegramClient('session', api_id, api_hash)
+# === Create client ===
+client = TelegramClient("bot_session", API_ID, API_HASH)
 
-classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
-categories = ["football", "boxing", "basketball", "miscellaneous"]
+# === Start using bot token automatically (no input) ===
+if BOT_TOKEN:
+    client.start(bot_token=BOT_TOKEN)
+else:
+    raise ValueError("❌ TELEGRAM_BOT_TOKEN not found in environment variables.")
 
-def parse_message(message):
-    """
-    Parses the message for channel number, event name, and time.
-    Assumes message format: 'Channel X: Event Name at TIME'
-    """
-    match = re.match(r'Channel (\d+): (.+?) at (\d{1,2}:\d{2}\s?[APMapm]{2})', message)
-    if match:
-        channel_number = int(match.group(1))
-        event_name = match.group(2).strip()
-        event_time = match.group(3).strip()
-        return channel_number, event_name, event_time
-    else:
-        # If parsing fails, use defaults
-        return 0, message, "TBD"
+# === Channel username or ID ===
+CHANNEL_USERNAME = "your_channel_username_here"  # e.g. "mychannel" or "-1001234567890"
 
-def update_json(channel_number, event_text, time):
-    try:
-        with open('data.json', 'r') as f:
-            data = json.load(f)
-    except:
-        data = []
+# === JSON data file path ===
+DATA_FILE = "data.json"
 
-    result = classifier(event_text, candidate_labels=categories)
-    tag = result['labels'][0]
+# === Helper to load old data ===
+def load_data():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
 
-    # Append new event
-    data.append({
-        "channel": channel_number,
-        "event": event_text,
-        "time": time,
-        "category": tag
-    })
+# === Helper to save new data ===
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
-    # Save
-    with open('data.json', 'w') as f:
-        json.dump(data, f, indent=4)
-
+# === Main async function ===
 async def main():
-    # Get channel entity from invite link
-    channel = await client.get_entity(invite_link)
+    print(f"📡 Fetching messages from {CHANNEL_USERNAME}...")
+    old_data = load_data()
+    old_ids = {msg["id"] for msg in old_data}
 
-    @client.on(events.NewMessage(chats=channel))
-    async def handler(event):
-        message = event.message.message
-        channel_number, event_name, event_time = parse_message(message)
-        update_json(channel_number, event_name, event_time)
-        print(f"Added event: Channel {channel_number} | {event_name} | {event_time}")
+    messages = []
+    async for message in client.iter_messages(CHANNEL_USERNAME, limit=50):
+        if message.text and message.id not in old_ids:
+            messages.append({
+                "id": message.id,
+                "date": message.date.strftime("%Y-%m-%d %H:%M:%S"),
+                "text": message.text,
+            })
 
-    print("Listening for new messages...")
-    await client.run_until_disconnected()
+    if messages:
+        print(f"✅ {len(messages)} new messages fetched.")
+        new_data = messages + old_data
+        save_data(new_data)
+    else:
+        print("ℹ️ No new messages found.")
 
-client.start()
-client.loop.run_until_complete(main())
+    print("💾 data.json updated successfully.")
+
+# === Run ===
+with client:
+    client.loop.run_until_complete(main())
